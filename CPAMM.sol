@@ -37,10 +37,10 @@ contract CPAMM {
     }
 
     //swap tokens
-    function swap(address _tokenIn, uint256 _amountIn)
-        external
-        returns (uint256 amountOut)
-    {
+    function swap(
+        address _tokenIn,
+        uint256 _amountIn
+    ) external returns (uint256 amountOut) {
         require(
             _tokenIn == address(token0) || _tokenIn == address(token1),
             "Invalid token"
@@ -77,10 +77,10 @@ contract CPAMM {
     }
 
     //add liquidity
-    function addLiquidity(uint256 _amount0, uint256 _amount1)
-        external
-        returns (uint256 shares)
-    {
+    function addLiquidity(
+        uint256 _amount0,
+        uint256 _amount1
+    ) external returns (uint256 shares) {
         //Pull token0 and token1
         token0.transferFrom(msg.sender, address(this), _amount0);
         token1.transferFrom(msg.sender, address(this), _amount1);
@@ -114,10 +114,9 @@ contract CPAMM {
     }
 
     //remove liquidity
-    function removeLiquidity(uint256 _shares)
-        external
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function removeLiquidity(
+        uint256 _shares
+    ) external returns (uint256 amount0, uint256 amount1) {
         //calculate amount0 and amount1 to withdraw
         //dx = s / T * x
         //dy = s / T * y
@@ -160,4 +159,3 @@ contract CPAMM {
         return x <= y ? x : y;
     }
 }
-
