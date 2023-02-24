@@ -30,6 +30,12 @@ contract CPAMM {
         totalSupply -= _amount;
     }
 
+    //update reserve
+    function _update(uint256 _reserve0, uint256 _reserve1) private {
+        reserve0 = _reserve0;
+        reserve1 = _reserve1;
+    }
+
     //swap tokens
     function swap(address _tokenIn, uint256 _amountIn)
         external
@@ -43,9 +49,14 @@ contract CPAMM {
 
         //determine which token is coming into the liquidity pool
         bool isToken0 = _tokenIn == address(token0);
-        (IERC20 tokenIn, IERC20 tokenOut, uint256 reserveIn, uint256 reserveOut) = isToken0
-            ? (token0, token1, reserve0, reserve1)
-            : (token1, token0, reserve1, reserve0);
+        (
+            IERC20 tokenIn,
+            IERC20 tokenOut,
+            uint256 reserveIn,
+            uint256 reserveOut
+        ) = isToken0
+                ? (token0, token1, reserve0, reserve1)
+                : (token1, token0, reserve1, reserve0);
 
         //Pull in token
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);
@@ -53,16 +64,100 @@ contract CPAMM {
         //calculate tokenOut including fee 0.3%
         uint256 amountWithFee = (_amountIn * 997) / 1000;
         // dy = ydx / (x + dx)
-        amountOut = (reserve1 * amountWithFee) / (reserve0 + amountWithFee);
+        amountOut = (reserveOut * amountWithFee) / (reserveIn + amountWithFee);
 
         //transfer it to msg.sender
         tokenOut.transfer(msg.sender, amountOut);
+
+        //update the reserves
+        _update(
+            token0.balanceOf(address(this)),
+            token1.balanceOf(address(this))
+        );
     }
 
     //add liquidity
-    function addLiquidity() external {}
+    function addLiquidity(uint256 _amount0, uint256 _amount1)
+        external
+        returns (uint256 shares)
+    {
+        //Pull token0 and token1
+        token0.transferFrom(msg.sender, address(this), _amount0);
+        token1.transferFrom(msg.sender, address(this), _amount1);
+
+        // dy / dx  = y / x
+        if (reserve0 > 0 || reserve1 > 0) {
+            require(reserve0 * _amount1 == reserve1 * _amount0, "dy/dx != y/x");
+        }
+
+        //mint shares
+        // f(x, y) = value of liquidity = sqrt(x,y)
+        // s = dx/x * T = dy/y * T
+
+        if (totalSupply == 0) {
+            shares = _sqrt(_amount0 * _amount1);
+        } else {
+            shares = _min(
+                (_amount0 * totalSupply) / reserve0,
+                (_amount0 * totalSupply) / reserve1
+            );
+        }
+
+        require(shares > 0, "Shares = 0");
+        _mint(msg.sender, shares);
+
+        //Update the reserves
+        _update(
+            token0.balanceOf(address(this)),
+            token1.balanceOf(address(this))
+        );
+    }
 
     //remove liquidity
-    function removeLiquidity() external {}
+    function removeLiquidity(uint256 _shares)
+        external
+        returns (uint256 amount0, uint256 amount1)
+    {
+        //calculate amount0 and amount1 to withdraw
+        //dx = s / T * x
+        //dy = s / T * y
+        uint256 bal0 = token0.balanceOf(address(this));
+        uint256 bal1 = token1.balanceOf(address(this));
+
+        amount0 = (_shares * bal0) / totalSupply;
+        amount1 = (_shares * bal1) / totalSupply;
+
+        require(amount0 > 0 && amount1 > 0, "amount0 or amount1 = 0");
+
+        //Burn shares
+        _burn(msg.sender, _shares);
+
+        //Update the reserves
+        _update(bal0 - amount0, bal1 - amount1);
+
+        //Transfer tokens to msg.sender
+        token0.transfer(msg.sender, amount0);
+        token1.transfer(msg.sender, amount1);
+    }
+
+    //sqrt() function
+
+    function _sqrt(uint256 y) private pure returns (uint256 z) {
+        if (y > 3) {
+            z = y;
+            uint256 x = y / 2 + 1;
+            while (x < z) {
+                z = x;
+                x = (y / x + x) / 2;
+            }
+        } else if (y != 0) {
+            z = 1;
+        }
+    }
+
+    //minimum function
+    function _min(uint256 x, uint256 y) private pure returns (uint256) {
+        return x <= y ? x : y;
+    }
 }
 
